@@ -131,13 +131,9 @@ vogue-vision/
 
 ## Security
 
-⚠️ **Action needed:** `keys/private.key` is currently committed in git history and has been pushed to the remote. Treat that key as compromised:
-
-1. Rotate it — generate a new key pair for this Application in the Vonage dashboard and update your local `keys/private.key` / `.env`.
-2. Add `keys/` (or the specific key file) to `.gitignore` so it isn't re-committed.
-3. Optionally scrub the old key from git history (e.g. `git filter-repo`) if the repo is public or shared.
-
-More generally: `.env` is already git-ignored — keep it that way, and never log full API keys or tokens (the current backend logs truncated previews only, which is fine).
+- Never commit `.env` or `keys/private.key` — both are secrets. `.env` is already git-ignored; `keys/` is too (see below).
+- If a key or token is ever accidentally committed, treat it as compromised: rotate it immediately in the Vonage/Google dashboard rather than relying on removing it from a future commit.
+- Avoid logging full API keys or tokens; the current backend only logs truncated previews, which is fine.
 
 ## Troubleshooting
 
