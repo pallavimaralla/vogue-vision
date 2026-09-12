@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vogue Vision</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      max-width: 600px;
+      width: 100%;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+      color: #333;
+    }
+
+    #video-container {
+      position: relative;
+      width: 100%;
+      background: #000;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 20px;
+      min-height: 400px;
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+
+    button {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 600;
+      transition: transform 0.2s;
+    }
+
+    button:hover {
+      transform: scale(1.05);
+    }
+
+    button:active {
+      transform: scale(0.95);
+    }
+
+    #status {
+      text-align: center;
+      margin-top: 15px;
+      font-size: 14px;
+      color: #666;
+    }
+
+    .error {
+      color: #e74c3c;
+      background: #fadbd8;
+      padding: 10px;
+      border-radius: 6px;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>✨ Vogue Vision</h1>
+    <div id="video-container">
+      <video id="video" autoplay muted playsinline></video>
+    </div>
+    <div class="controls">
+      <button id="captureBtn">📸 Capture Look</button>
+    </div>
+    <div id="status">Loading video...</div>
+    <canvas id="snapshot" style="display: none;"></canvas>
+  </div>
+
+  <script src="https://static.opentok.com/v2/js/opentok.min.js"></script>
+  <script>
+    let session = null;
+    let publisher = null;
+
+    async function initVideo() {
+      try {
+        const response = await fetch('/api/token');
+        const data = await response.json();
+
+        if (!data.sessionId || !data.token) {
+          throw new Error('Failed to get session/token from backend');
+        }
+
+        const OT = window.OT;
+        session = OT.initSession(data.apiKey, data.sessionId);
+
+        // Video error handling
+        session.on('sessionDisconnected', (event) => {
+          console.log('Session disconnected.');
+        });
+
+        session.on('streamCreated', (event) => {
+          console.log('Stream created:', event.stream.name);
+        });
+
+        // Connect to session
+        session.connect(data.token, (err) => {
+          if (err) {
+            console.error('Connection error:', err);
+            document.getElementById('status').innerHTML = '<div class="error">Connection failed. Check console.</div>';
+            return;
+          }
+
+          // Publish video
+          publisher = OT.initPublisher('video-container', {
+            audioSource: null,
+            videoSource: null,
+            width: '100%',
+            height: '100%'
+          });
+
+          session.publish(publisher, (err) => {
+            if (err) {
+              console.error('Publish error:', err);
+              document.getElementById('status').innerHTML = '<div class="error">Publish failed.</div>';
+              return;
+            }
+            document.getElementById('status').innerText = '✅ Camera active';
+          });
+        });
+      } catch (error) {
+        console.error('Init error:', error);
+        document.getElementById('status').innerHTML = `<div class="error">${error.message}</div>`;
+      }
+    }
+
+    document.getElementById('captureBtn').addEventListener('click', () => {
+      if (!publisher) {
+        alert('Camera not ready yet');
+        return;
+      }
+
+      const videoElement = document.getElementById('video');
+      const canvas = document.getElementById('snapshot');
+      const ctx = canvas.getContext('2d');
+
+      canvas.width = videoElement.videoWidth;
+      canvas.height = videoElement.videoHeight;
+      ctx.drawImage(videoElement, 0, 0);
+
+      const imageData = canvas.toDataURL('image/jpeg');
+      console.log('Captured image, sending to backend...');
+      // Will be wired up in STAGE 2
+    });
+
+    window.addEventListener('DOMContentLoaded', initVideo);
+  </script>
+</body>
+</html>
