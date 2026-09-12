@@ -1,5 +1,7 @@
 # Vogue Vision
 
+##Video Link https://youtu.be/UtM0XNmFFIU
+
 **Your outfit. Your moment. Live AR effects tailored by AI.**
 
 Vogue Vision turns your mirror into a runway. Point your camera and let Gemini read your vibe. Get a verdict on your fit, a style name, a tip to level it up, and a live AR scene to match. Then broadcast it.
