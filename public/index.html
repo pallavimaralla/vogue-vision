@@ -37,19 +37,12 @@
     }
 
     #video-container {
-      position: relative;
       width: 100%;
       background: #000;
       border-radius: 8px;
       overflow: hidden;
       margin-bottom: 20px;
       min-height: 400px;
-    }
-
-    video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
     }
 
     .controls {
@@ -70,12 +63,17 @@
       transition: transform 0.2s;
     }
 
-    button:hover {
+    button:hover:not(:disabled) {
       transform: scale(1.05);
     }
 
-    button:active {
+    button:active:not(:disabled) {
       transform: scale(0.95);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
 
     #status {
@@ -83,6 +81,39 @@
       margin-top: 15px;
       font-size: 14px;
       color: #666;
+      font-weight: 500;
+    }
+
+    #verdict-section {
+      margin-top: 20px;
+      padding: 15px;
+      background: #f8f9ff;
+      border-radius: 8px;
+      border-left: 4px solid #667eea;
+      display: none;
+    }
+
+    #verdict-section.show {
+      display: block;
+      animation: slideIn 0.3s ease-out;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    #verdict-text {
+      font-size: 15px;
+      line-height: 1.6;
+      color: #333;
+      white-space: pre-wrap;
     }
 
     .error {
@@ -91,98 +122,219 @@
       padding: 10px;
       border-radius: 6px;
       margin-top: 10px;
+      font-weight: 500;
+    }
+
+    canvas {
+      display: none;
     }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>✨ Vogue Vision</h1>
-    <div id="video-container">
-      <video id="video" autoplay muted playsinline></video>
-    </div>
+    <div id="video-container"></div>
     <div class="controls">
-      <button id="captureBtn">📸 Capture Look</button>
+      <button id="captureBtn" disabled>📸 Capture Look</button>
     </div>
-    <div id="status">Loading video...</div>
-    <canvas id="snapshot" style="display: none;"></canvas>
+    <div id="status">Connecting to camera...</div>
+    <div id="verdict-section">
+      <div id="verdict-text"></div>
+    </div>
+    <canvas id="snapshot"></canvas>
   </div>
 
-  <script src="https://static.opentok.com/v2/js/opentok.min.js"></script>
+  <script src="/vendor/opentok.js"></script>
   <script>
     let session = null;
     let publisher = null;
 
-    async function initVideo() {
-      try {
-        const response = await fetch('/api/token');
-        const data = await response.json();
+    function setStatus(msg) {
+      document.getElementById('status').textContent = msg;
+      console.log('📊 Status:', msg);
+    }
 
-        if (!data.sessionId || !data.token) {
-          throw new Error('Failed to get session/token from backend');
-        }
-
-        const OT = window.OT;
-        session = OT.initSession(data.apiKey, data.sessionId);
-
-        // Video error handling
-        session.on('sessionDisconnected', (event) => {
-          console.log('Session disconnected.');
-        });
-
-        session.on('streamCreated', (event) => {
-          console.log('Stream created:', event.stream.name);
-        });
-
-        // Connect to session
-        session.connect(data.token, (err) => {
-          if (err) {
-            console.error('Connection error:', err);
-            document.getElementById('status').innerHTML = '<div class="error">Connection failed. Check console.</div>';
-            return;
-          }
-
-          // Publish video
-          publisher = OT.initPublisher('video-container', {
-            audioSource: null,
-            videoSource: null,
-            width: '100%',
-            height: '100%'
-          });
-
-          session.publish(publisher, (err) => {
-            if (err) {
-              console.error('Publish error:', err);
-              document.getElementById('status').innerHTML = '<div class="error">Publish failed.</div>';
-              return;
-            }
-            document.getElementById('status').innerText = '✅ Camera active';
-          });
-        });
-      } catch (error) {
-        console.error('Init error:', error);
-        document.getElementById('status').innerHTML = `<div class="error">${error.message}</div>`;
+    function logError(error) {
+      if (error) {
+        console.error('🎥 ✗ Vonage Error:', error.message);
+        console.error('   code:', error.code);
+        console.error('   full error:', error);
+        setStatus('❌ Error: ' + error.message);
       }
     }
 
-    document.getElementById('captureBtn').addEventListener('click', () => {
+    async function connectSession(token) {
+      return new Promise((resolve, reject) => {
+        console.log('🎥 connectSession: calling session.connect()');
+        session.connect(token, (error) => {
+          if (error) {
+            console.error('🎥 ✗ connectSession error:', error.message);
+            reject(error);
+          } else {
+            console.log('🎥 ✓ connectSession callback: success');
+            resolve();
+          }
+        });
+      });
+    }
+
+    async function initVideo() {
+      try {
+        console.log('\n🎥 === INIT VIDEO START ===');
+        setStatus('Getting session token...');
+
+        console.log('🎥 Fetching /api/token...');
+        const response = await fetch('/api/token');
+        if (!response.ok) {
+          throw new Error(`Failed to get token: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        console.log('🎥 Token response received:');
+        console.log('   applicationId:', data.applicationId);
+        console.log('   sessionId:', data.sessionId.slice(0, 50) + '...');
+        console.log('   token length:', data.token);
+
+        const OT = window.OT;
+        if (!OT) {
+          throw new Error('OpenTok library not loaded');
+        }
+        console.log('🎥 OT library loaded:', typeof OT);
+
+        console.log('🎥 Initializing session...');
+        session = OT.initSession(data.applicationId, data.sessionId);
+        console.log('🎥 Session object created:', session.sessionId ? '✓' : '✗');
+
+        session.on('sessionDisconnected', (event) => {
+          console.log('🎥 sessionDisconnected event');
+        });
+
+        session.on('streamCreated', (event) => {
+          console.log('🎥 streamCreated event:', event.stream.name);
+        });
+
+        session.on('error', (event) => {
+          console.error('🎥 session error event:', event.message);
+        });
+
+        // Connect to session FIRST
+        console.log('🎥 Connecting to session with token...');
+        setStatus('Connecting...');
+        await connectSession(data.token);
+        console.log('🎥 ✓ Connected to session');
+
+        // THEN create publisher
+        console.log('🎥 Creating publisher...');
+        setStatus('Starting camera...');
+        const container = document.getElementById('video-container');
+
+        publisher = OT.initPublisher(
+          container,
+          {
+      
+            width: '100%',
+            height: '100%'
+          },
+          (err) => {
+            if (err) {
+              console.error('🎥 ✗ Publisher init callback error:', err.message);
+              logError(err);
+            } else {
+              console.log('🎥 ✓ Publisher init callback: success');
+            }
+          }
+        );
+        console.log('🎥 Publisher object created');
+
+        // THEN publish
+        console.log('🎥 Publishing to session...');
+        session.publish(publisher, (err) => {
+          if (err) {
+            console.error('🎥 ✗ Publish error:', err.message);
+            console.error('   error code:', err.code);
+            logError(err);
+          } else {
+            console.log('🎥 ✓ Published successfully');
+            setStatus('✅ Camera active');
+            document.getElementById('captureBtn').disabled = false;
+          }
+        });
+
+        console.log('🎥 === INIT VIDEO COMPLETE ===\n');
+
+      } catch (error) {
+        console.error('🎥 ✗ Init error:', error.message);
+        console.error('🎥 Stack:', error.stack);
+        setStatus('❌ ' + error.message);
+      }
+    }
+
+    document.getElementById('captureBtn').addEventListener('click', async () => {
       if (!publisher) {
-        alert('Camera not ready yet');
+        console.log('📸 Capture clicked but publisher not ready');
+        alert('Camera not ready');
         return;
       }
 
-      const videoElement = document.getElementById('video');
-      const canvas = document.getElementById('snapshot');
-      const ctx = canvas.getContext('2d');
+      const btn = document.getElementById('captureBtn');
+      btn.disabled = true;
 
-      canvas.width = videoElement.videoWidth;
-      canvas.height = videoElement.videoHeight;
-      ctx.drawImage(videoElement, 0, 0);
+      try {
+        console.log('📸 Capturing image...');
+        const container = document.getElementById('video-container');
+        const video = container.querySelector('video');
 
-      const imageData = canvas.toDataURL('image/jpeg');
-      console.log('Captured image, sending to backend...');
-      // Will be wired up in STAGE 2
+        if (!video) {
+          console.error('📸 ✗ Video element not found');
+          return;
+        }
+
+        const canvas = document.getElementById('snapshot');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0);
+
+        const imageBase64 = canvas.toDataURL('image/jpeg');
+        console.log('📸 ✓ Captured image:', imageBase64.length, 'bytes');
+
+        // STAGE 3: Send to backend
+        console.log('📸 Sending to Gemini API...');
+        setStatus('🤖 Analyzing with Gemini...');
+
+        const response = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64 })
+        });
+
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.error || 'Analysis failed');
+        }
+
+        const result = await response.json();
+        console.log('📸 ✓ Got verdict:', result.verdict);
+
+        // Display verdict
+        const verdictSection = document.getElementById('verdict-section');
+        const verdictText = document.getElementById('verdict-text');
+        verdictText.textContent = result.verdict;
+        verdictSection.classList.add('show');
+
+        setStatus('✅ Camera active');
+      } catch (error) {
+        console.error('📸 ✗ Capture error:', error.message);
+        setStatus('❌ ' + error.message);
+      } finally {
+        btn.disabled = false;
+      }
     });
 
+    document.getElementById('captureBtn').disabled = true;
+
+    console.log('🎥 Page loaded, starting initialization...');
     window.addEventListener('DOMContentLoaded', initVideo);
   </script>
 </body>
