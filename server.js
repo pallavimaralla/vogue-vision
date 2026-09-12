@@ -147,7 +147,23 @@ app.post("/api/analyze", async (req, res) => {
     // Remove data URI prefix if present
     const base64Data = imageBase64.split(",")[1] || imageBase64;
 
-    const prompt = `You are a savage, hilarious runway judge with zero filter. Look at this outfit and respond with exactly two things: (1) a made-up, punchy trend name for the look in quotes, like a fake fashion microtrend (e.g. 'unemployed art teacher core'), and (2) a one-sentence verdict that's funny but specific about what you see (colors, fit, vibe). Then give a score out of 10. Keep the whole thing under 40 words total.`;
+    const prompt = `You are a detailed fashion stylist conducting an in-depth outfit analysis. Analyze this outfit thoroughly and provide:
+
+1. **Outfit Context**: What occasion/vibe does this work for? (casual, work, date night, weekend, athletic, etc.)
+
+2. **Color Analysis**: What colors are prominent? Do they complement each other? Any color theory insights?
+
+3. **Fit & Silhouette**: How does the fit work for the person's frame? Is it flattering? Any observations about proportions?
+
+4. **Style Elements**: What's the dominant style? (minimalist, bohemian, classic, edgy, preppy, etc.) Are there any standout pieces?
+
+5. **Overall Vibe**: Describe the overall energy/aesthetic in 1-2 sentences.
+
+6. **Styling Tips**: One actionable suggestion to elevate the look.
+
+7. **Score**: Rate the outfit 1-10 with a brief reason.
+
+Be encouraging, specific, and honest. Focus on what works well and constructive improvements.`;
 
     const result = await model.generateContent([
       {
